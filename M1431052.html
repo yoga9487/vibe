@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Tasks - 跨裝置即時同步任務管理</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Font Awesome 紀念圖標 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 載入 Google 字體 (Inter & Noto Sans TC) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- 載入 Canvas Confetti (100%完成慶祝特效) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans TC', sans-serif;
+            background: radial-gradient(circle at 50% 50%, #10162f 0%, #080a15 100%);
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+
+        /* 宇宙深處發光體效果 */
+        .glow-orb-1 {
+            position: absolute;
+            top: -10%;
+            left: -10%;
+            width: 60vw;
+            height: 60vw;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .glow-orb-2 {
+            position: absolute;
+            bottom: -10%;
+            right: -10%;
+            width: 50vw;
+            height: 50vw;
+            background: radial-gradient(circle, rgba(147, 51, 234, 0.12) 0%, rgba(0, 0, 0, 0) 70%);
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* 頂級玻璃擬態面板 */
+        .glass-panel {
+            background: rgba(17, 24, 39, 0.45);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* 更精細微弱的內邊框發光 */
+        .glass-input {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+        }
+
+        /* LOGO漸層按鈕 */
+        .logo-gradient {
+            background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+        }
+
+        /* 呼吸同步動畫效果 */
+        @keyframes pulse-soft {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.95); }
+        }
+        .pulse-sync {
+            animation: pulse-soft 2s infinite ease-in-out;
+        }
+
+        /* 隱藏滾動條 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* 任務切換滑動與漸變過度 */
+        .view-transition {
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* 自定義切換開關 */
+        .custom-checkbox:checked + label .checkbox-box {
+            background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+            border-color: transparent;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 md:p-8 relative select-none">
+
+    <!-- 宇宙發光背景層 -->
+    <div class="glow-orb-1"></div>
+    <div class="glow-orb-2"></div>
+
+    <!-- 主框架外殼：支援多端預覽切換（預設為完美契合圖例的行動模擬，亦可切換至全螢幕寬度） -->
+    <div class="w-full max-w-md relative z-10 flex flex-col justify-between h-[820px] max-h-[90vh] glass-panel rounded-[40px] overflow-hidden p-6 md:p-8">
+        
+        <!-- 全域音效及視聽提示元素 -->
+        <audio id="sound-effect" class="hidden"></audio>
+
+        <!-- ========================================================== -->
+        <!-- 畫面 1: 起始歡迎頁面 (左側 UI 復刻) -->
+        <!-- ========================================================== -->
+        <div id="welcome-view" class="view-transition flex flex-col justify-between h-full w-full">
+            <!-- 佔位頂部 -->
+            <div></div>
+
+            <!-- 主體毛玻璃卡片區 -->
+            <div class="glass-panel w-full rounded-[32px] p-8 text-center flex flex-col items-center justify-center py-12 relative overflow-hidden">
+                <!-- LOGO 區區 -->
+                <div class="logo-gradient w-20 h-20 rounded-2xl flex items-center justify-center mb-8 relative group">
+                    <div class="absolute inset-0 bg-blue-400 opacity-20 blur-md rounded-2xl group-hover:opacity-40 transition-opacity"></div>
+                    <!-- 復刻圖標中的清單清單符號 -->
+                    <svg class="w-10 h-10 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="9" y1="6" x2="20" y2="6"></line>
+                        <line x1="9" y1="12" x2="20" y2="12"></line>
+                        <line x1="9" y1="18" x2="20" y2="18"></line>
+                        <rect x="3" y="5" width="2" height="2" rx="0.5" fill="currentColor"></rect>
+                        <rect x="3" y="11" width="2" height="2" rx="0.5" fill="currentColor"></rect>
+                        <rect x="3" y="17" width="2" height="2" rx="0.5" fill="currentColor"></rect>
+                    </svg>
+                </div>
+
+                <!-- 應用程式名稱與標語 -->
+                <h1 class="text-3xl font-extrabold text-white tracking-tight mb-3">Cloud Tasks</h1>
+                <p class="text-sm text-gray-400 font-normal tracking-wide px-4 leading-relaxed mb-10">
+                    跨裝置即時同步，讓效率無所不在
+                </p>
+
+                <!-- 立即開始按鈕 (完美復刻藍色發光按鈕) -->
+                <button onclick="enterApp()" class="w-full py-4 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-base transition-all duration-300 transform active:scale-95 shadow-[0_4px_20px_rgba(37,99,235,0.4)] hover:shadow-[0_4px_30px_rgba(37,99,235,0.6)] flex items-center justify-center gap-2">
+                    <span>立即開始使用</span>
+                    <span class="text-lg">✨</span>
+                </button>
+            </div>
+
+            <!-- 佔位底部 -->
+            <div class="text-center text-xs text-gray-600 font-light tracking-widest pb-2">
+                CLOUD TASKS v2.0
+            </div>
+        </div>
+
+        <!-- ========================================================== -->
+        <!-- 畫面 2: 任務管理主介面 (右側 UI 復刻) -->
+        <!-- ========================================================== -->
+        <div id="main-view" class="view-transition hidden flex-col justify-between h-full w-full opacity-0 translate-y-8">
+            <!-- 頂部導航 & 狀態列 -->
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <!-- 小型 LOGO -->
+                    <div class="logo-gradient w-9 h-9 rounded-xl flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="9" y1="6" x2="20" y2="6"></line>
+                            <line x1="9" y1="12" x2="20" y2="12"></line>
+                            <line x1="9" y1="18" x2="20" y2="18"></line>
+                            <rect x="3" y="5" width="2" height="2" rx="0.5" fill="currentColor"></rect>
+                            <rect x="3" y="11" width="2" height="2" rx="0.5" fill="currentColor"></rect>
+                            <rect x="3" y="17" width="2" height="2" rx="0.5" fill="currentColor"></rect>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-white tracking-wide">我的任務</h2>
+                        <!-- 雲端同步狀態 (完美復刻綠點 vnigpuwE... 結構) -->
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                            <div id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></div>
+                            <span id="sync-status" class="text-[10px] text-gray-500 font-mono tracking-wider">SYNCED: vnigpuwE...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 登出/返回首頁按鈕 -->
+                <button onclick="exitApp()" class="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors border border-white/5 group" title="返回首頁">
+                    <i class="fa-solid fa-right-from-bracket text-gray-400 group-hover:text-white text-sm transition-colors"></i>
+                </button>
+            </div>
+
+            <!-- 今日完成率進度卡片 (完美復刻 0% 與獎盃背景) -->
+            <div class="glass-panel w-full rounded-2xl p-5 mb-5 relative overflow-hidden flex justify-between items-center">
+                <!-- 左側：數據展示 -->
+                <div class="relative z-10">
+                    <span class="text-xs text-gray-400 font-medium tracking-wider block mb-1">今日完成率</span>
+                    <span id="completion-rate" class="text-4xl font-extrabold text-white tracking-tight transition-all duration-500">0%</span>
+                </div>
+                <!-- 右側：發光獎盃圖標 -->
+                <div class="relative">
+                    <div id="trophy-glow" class="absolute inset-0 bg-yellow-500/0 rounded-full blur-xl transition-all duration-500"></div>
+                    <i id="trophy-icon" class="fa-solid fa-trophy text-3xl text-gray-700 transition-all duration-500 relative z-10"></i>
+                </div>
+                <!-- 裝飾微弱背光條 -->
+                <div class="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500" id="progress-bar" style="width: 0%"></div>
+            </div>
+
+            <!-- 任務清單呈現區域 (自適應滾動) -->
+            <div class="flex-1 overflow-y-auto no-scrollbar mb-5 space-y-3" id="task-list-container">
+                <!-- 動態注入的任務項目會呈現在此 -->
+            </div>
+
+            <!-- 輸入新任務區域 (底端輸入格復刻) -->
+            <div class="glass-input w-full rounded-2xl p-2 flex items-center justify-between mb-4">
+                <input 
+                    type="text" 
+                    id="new-task-input" 
+                    placeholder="輸入新任務..." 
+                    class="bg-transparent border-none outline-none text-white text-sm placeholder-gray-500 px-3 py-2 w-full focus:ring-0"
+                    onkeypress="handleKeyPress(event)"
+                >
+                <!-- 加號按鈕 -->
+                <button onclick="addTask()" class="logo-gradient w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold transition-all transform hover:scale-105 active:scale-95 shadow-md">
+                    <i class="fa-solid fa-plus text-sm"></i>
+                </button>
+            </div>
+
+            <!-- 完美的魔幻空狀態 (完美復刻萬事俱備只欠任務與發光星光圖案) -->
+            <div id="empty-state" class="flex flex-col items-center justify-center py-6 animate-fade-in">
+                <div class="relative w-20 h-20 flex items-center justify-center mb-4">
+                    <!-- 背景柔和霓虹環 -->
+                    <div class="absolute inset-0 rounded-full bg-white/5 backdrop-blur-md border border-white/5 flex items-center justify-center"></div>
+                    <!-- 星星發光效果 -->
+                    <div class="absolute w-6 h-6 bg-blue-500/10 blur-md rounded-full pulse-sync"></div>
+                    <i class="fa-solid fa-wand-magic-sparkles text-2xl text-gray-600 pulse-sync relative z-10"></i>
+                </div>
+                <p class="text-xs text-gray-500 tracking-widest font-normal text-center">萬事俱備，只欠任務！</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ==========================================================
+        // 狀態管理
+        // ==========================================================
+        let tasks = [];
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cloud-tasks-local';
+        
+        // 隨機產生一個如同圖例中質感的裝置同步金鑰
+        const generateSyncKey = () => {
+            const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let result = '';
+            for (let i = 0; i < 8; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        };
+        const syncKey = generateSyncKey();
+
+        // 頁面加載初始化
+        window.onload = () => {
+            document.getElementById('sync-status').innerText = `SYNCED: ${syncKey}...`;
+            loadLocalTasks();
+            updateUI();
+        };
+
+        // ==========================================================
+        // 音效引擎 (使用 Web Audio API 原生合成音，不需外部檔案)
+        // ==========================================================
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSynthSound(type) {
+            try {
+                // 恢復音訊內容，解決瀏覽器自動播放限制
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'add') {
+                    // 清亮上升音效
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                    osc.frequency.exponentialRampToValueAtTime(783.99, audioCtx.currentTime + 0.15); // G5
+                    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.2);
+                } else if (type === 'complete') {
+                    // 悅耳和諧雙音符
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+                    osc.frequency.setValueAtTime(987.77, audioCtx.currentTime + 0.08); // B5
+                    gain.gain.setValueAtTime(0.18, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.3);
+                } else if (type === 'delete') {
+                    // 微妙下降音效
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(349.23, audioCtx.currentTime); // F4
+                    osc.frequency.exponentialRampToValueAtTime(220.00, audioCtx.currentTime + 0.12); // A3
+                    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.15);
+                } else if (type === 'all-clear') {
+                    // 大功告成大和弦
+                    const chord = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                    chord.forEach((freq, idx) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.type = 'sine';
+                        o.frequency.setValueAtTime(freq, audioCtx.currentTime + (idx * 0.05));
+                        g.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+                        o.start();
+                        o.stop(audioCtx.currentTime + 0.4);
+                    });
+                }
+            } catch (e) {
+                console.log("Audio synthesis error:", e);
+            }
+        }
+
+        // ==========================================================
+        // 視圖轉場邏輯
+        // ==========================================================
+        function enterApp() {
+            playSynthSound('add');
+            const welcome = document.getElementById('welcome-view');
+            const main = document.getElementById('main-view');
+
+            welcome.classList.add('opacity-0', 'translate-y-[-16px]');
+            setTimeout(() => {
+                welcome.classList.add('hidden');
+                main.classList.remove('hidden');
+                // 渲染後滑入
+                setTimeout(() => {
+                    main.classList.remove('opacity-0', 'translate-y-8');
+                    main.classList.add('opacity-100', 'translate-y-0');
+                }, 50);
+            }, 300);
+        }
+
+        function exitApp() {
+            playSynthSound('delete');
+            const welcome = document.getElementById('welcome-view');
+            const main = document.getElementById('main-view');
+
+            main.classList.remove('opacity-100', 'translate-y-0');
+            main.classList.add('opacity-0', 'translate-y-8');
+            setTimeout(() => {
+                main.classList.add('hidden');
+                welcome.classList.remove('hidden');
+                setTimeout(() => {
+                    welcome.classList.remove('opacity-0', 'translate-y-[-16px]');
+                }, 50);
+            }, 300);
+        }
+
+        // ==========================================================
+        // 任務狀態管理
+        // ==========================================================
+        function loadLocalTasks() {
+            const saved = localStorage.getItem(`tasks_${appId}`);
+            if (saved) {
+                try {
+                    tasks = JSON.parse(saved);
+                } catch (e) {
+                    tasks = [];
+                }
+            } else {
+                // 提供給初次使用者的精美預設任務
+                tasks = [
+                    { id: 1, text: "探索 Cloud Tasks 的玻璃擬態美學", completed: true },
+                    { id: 2, text: "新增今日的第一個工作任務", completed: false },
+                    { id: 3, text: "點擊右下角 + 按鈕開始體驗同步", completed: false }
+                ];
+            }
+        }
+
+        function saveTasks() {
+            localStorage.setItem(`tasks_${appId}`, JSON.stringify(tasks));
+            triggerCloudSyncAnimation();
+        }
+
+        // 模擬極致擬真的雲端同步閃爍動效
+        function triggerCloudSyncAnimation() {
+            const dot = document.getElementById('sync-dot');
+            const label = document.getElementById('sync-status');
+            
+            // 切換為同步中狀態
+            dot.classList.remove('bg-emerald-500', 'shadow-[0_0_8px_#10b981]');
+            dot.classList.add('bg-blue-500', 'shadow-[0_0_8px_#3b82f6]', 'animate-ping');
+            label.innerText = "SYNCING...";
+            label.classList.add('text-blue-400');
+
+            setTimeout(() => {
+                // 同步完成恢復
+                dot.classList.remove('bg-blue-500', 'shadow-[0_0_8px_#3b82f6]', 'animate-ping');
+                dot.classList.add('bg-emerald-500', 'shadow-[0_0_8px_#10b981]');
+                label.innerText = `SYNCED: ${syncKey}...`;
+                label.classList.remove('text-blue-400');
+            }, 1000);
+        }
+
+        // 新增任務
+        function addTask() {
+            const input = document.getElementById('new-task-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const newTask = {
+                id: Date.now(),
+                text: text,
+                completed: false
+            };
+
+            tasks.push(newTask);
+            input.value = "";
+            saveTasks();
+            updateUI();
+            playSynthSound('add');
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                addTask();
+            }
+        }
+
+        // 切換完成狀態
+        function toggleTask(id) {
+            tasks = tasks.map(task => {
+                if (task.id === id) {
+                    const nextState = !task.completed;
+                    if (nextState) {
+                        playSynthSound('complete');
+                    } else {
+                        playSynthSound('delete');
+                    }
+                    return { ...task, completed: nextState };
+                }
+                return task;
+            });
+            saveTasks();
+            updateUI();
+        }
+
+        // 刪除任務項目
+        function deleteTask(id) {
+            tasks = tasks.filter(task => task.id !== id);
+            saveTasks();
+            updateUI();
+            playSynthSound('delete');
+        }
+
+        // ==========================================================
+        // UI 渲染與計算
+        // ==========================================================
+        function updateUI() {
+            const listContainer = document.getElementById('task-list-container');
+            const emptyState = document.getElementById('empty-state');
+            
+            // 清空容器
+            listContainer.innerHTML = "";
+
+            if (tasks.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+
+                // 依未完成/已完成排序，並優雅生成任務元素
+                tasks.forEach(task => {
+                    const taskEl = document.createElement('div');
+                    taskEl.className = `glass-panel rounded-2xl p-4 flex items-center justify-between transition-all duration-300 transform border border-white/5 hover:border-white/10 ${task.completed ? 'opacity-60 bg-white/[0.01]' : 'opacity-100 hover:translate-x-1'}`;
+                    
+                    taskEl.innerHTML = `
+                        <div class="flex items-center gap-3.5 flex-1 pr-4">
+                            <input 
+                                type="checkbox" 
+                                id="task-chk-${task.id}" 
+                                class="hidden custom-checkbox" 
+                                ${task.completed ? 'checked' : ''}
+                                onchange="toggleTask(${task.id})"
+                            >
+                            <label for="task-chk-${task.id}" class="flex items-center cursor-pointer">
+                                <span class="checkbox-box w-5 h-5 rounded-md border border-white/20 flex items-center justify-center transition-all bg-white/5">
+                                    <i class="fa-solid fa-check text-[10px] text-white ${task.completed ? 'block' : 'hidden'}"></i>
+                                </span>
+                            </label>
+                            <span class="text-sm font-normal text-gray-200 tracking-wide transition-all ${task.completed ? 'line-through text-gray-500' : ''}">
+                                ${escapeHTML(task.text)}
+                            </span>
+                        </div>
+                        <button onclick="deleteTask(${task.id})" class="text-gray-500 hover:text-rose-400 transition-colors px-1 py-1">
+                            <i class="fa-regular fa-trash-can text-sm"></i>
+                        </button>
+                    `;
+                    listContainer.appendChild(taskEl);
+                });
+            }
+
+            // 計算並更新今日完成率
+            calculateCompletionRate();
+        }
+
+        // 進度率計算與精美獎盃特效
+        let lastRate = 0;
+        function calculateCompletionRate() {
+            const rateLabel = document.getElementById('completion-rate');
+            const progressBar = document.getElementById('progress-bar');
+            const trophyIcon = document.getElementById('trophy-icon');
+            const trophyGlow = document.getElementById('trophy-glow');
+
+            let rate = 0;
+            if (tasks.length > 0) {
+                const completedCount = tasks.filter(t => t.completed).length;
+                rate = Math.round((completedCount / tasks.length) * 100);
+            }
+
+            // 漸進數字動畫
+            animateValue(rateLabel, lastRate, rate, 500, "%");
+            
+            // 進度條與獎盃效果
+            progressBar.style.width = `${rate}%`;
+
+            if (rate === 100 && tasks.length > 0) {
+                // 滿分成就：點亮黃金獎盃
+                trophyIcon.className = "fa-solid fa-trophy text-3xl text-amber-400 transition-all duration-500 pulse-sync scale-110";
+                trophyGlow.className = "absolute inset-0 bg-amber-400/20 rounded-full blur-xl transition-all duration-500 opacity-100";
+                
+                // 僅在剛達到 100% 時，爆發一次極度夢幻的紙屑雨
+                if (lastRate < 100) {
+                    triggerConfetti();
+                    playSynthSound('all-clear');
+                }
+            } else {
+                // 未全滿狀態
+                trophyIcon.className = "fa-solid fa-trophy text-3xl text-gray-700 transition-all duration-500";
+                trophyGlow.className = "absolute inset-0 bg-yellow-500/0 rounded-full blur-xl transition-all duration-500 opacity-0";
+            }
+
+            lastRate = rate;
+        }
+
+        // 數值增加動畫效果
+        function animateValue(obj, start, end, duration, suffix = "") {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const currentVal = Math.floor(progress * (end - start) + start);
+                obj.innerHTML = currentVal + suffix;
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    obj.innerHTML = end + suffix;
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // 彩帶爆破特效
+        function triggerConfetti() {
+            const count = 200;
+            const defaults = {
+                origin: { y: 0.7 }
+            };
+
+            function fire(particleRatio, opts) {
+                confetti({
+                    ...defaults,
+                    ...opts,
+                    particleCount: Math.floor(count * particleRatio),
+                    colors: ['#3b82f6', '#6366f1', '#10b981', '#f59e0b', '#ec4899']
+                });
+            }
+
+            fire(0.25, {
+                spread: 26,
+                startVelocity: 55,
+            });
+            fire(0.2, {
+                spread: 60,
+            });
+            fire(0.35, {
+                spread: 100,
+                decay: 0.91,
+                scalar: 0.8
+            });
+            fire(0.1, {
+                spread: 120,
+                startVelocity: 25,
+                decay: 0.92,
+                scalar: 1.2
+            });
+            fire(0.1, {
+                spread: 120,
+                startVelocity: 45,
+            });
+        }
+
+        // 安全字串轉換，避免XSS
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag] || tag)
+            );
+        }
+    </script>
+</body>
+</html>
